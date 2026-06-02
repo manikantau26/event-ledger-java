@@ -14,7 +14,7 @@ spring:
       ddl-auto: update
 
 account-service:
-  base-url: http://localhost:8081
+  base-url: ${ACCOUNT_SERVICE_BASE_URL:http://localhost:8081}
 
 management:
   endpoints:

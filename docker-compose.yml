@@ -1,0 +1,24 @@
+services:
+  account-service:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /app
+    volumes:
+      - ./account-service:/app
+      - ~/.m2:/root/.m2
+    command: mvn spring-boot:run
+    ports:
+      - "8081:8081"
+
+  event-gateway:
+    image: maven:3.9.9-eclipse-temurin-17
+    working_dir: /app
+    volumes:
+      - ./event-gateway:/app
+      - ~/.m2:/root/.m2
+    command: mvn spring-boot:run
+    environment:
+      ACCOUNT_SERVICE_BASE_URL: http://account-service:8081
+    ports:
+      - "8080:8080"
+    depends_on:
+      - account-service
