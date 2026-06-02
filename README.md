@@ -1,119 +1,334 @@
 # Event Ledger
 
-Event Ledger is a Java Spring Boot take-home project with two independent microservices.
+This project implements a simple event ledger system using two Spring Boot microservices:
+
+- Event Gateway API
+- Account Service
+
+The system processes financial transaction events and is designed to handle duplicate event submissions, out-of-order event delivery, service failures, and basic observability requirements.
 
 ## Architecture
 
-The system has two services:
+The Event Gateway is the entry point for client requests. It validates incoming events, enforces idempotency, stores event records, and forwards transactions to the Account Service.
 
-1. Event Gateway API
-2. Account Service
+The Account Service owns account state and is responsible for storing transactions and calculating balances.
 
-The Event Gateway receives client requests, validates transaction events, stores events locally, handles idempotency, and calls the Account Service.
+The services communicate through synchronous REST calls and maintain separate databases to keep service boundaries clear.
 
-The Account Service stores account transactions and calculates balances.
+```text
+Client
+   |
+   v
++-------------------+
+| Event Gateway API |
+|      :8080        |
++---------+---------+
+          |
+          v
++-------------------+
+| Account Service   |
+|      :8081        |
++-------------------+
+```
 
-The services communicate through synchronous REST calls and do not share a database.
+## Features
 
-## Event Gateway API
+### Idempotent Event Processing
 
-Runs on port 8080.
+The Gateway stores events using the provided `eventId`.
 
-Endpoints:
+If the same event is submitted multiple times:
 
-- POST /events
-- GET /events/{id}
-- GET /events?account={accountId}
-- GET /accounts/{accountId}/balance
-- GET /health
-- GET /actuator/metrics
+- The original event is returned
+- The account balance is not updated again
+- Duplicate processing is avoided
 
-## Account Service
+### Out-of-Order Event Handling
 
-Runs on port 8081.
+Events may arrive in any order.
 
-Endpoints:
+When retrieving events for an account, results are sorted using the original `eventTimestamp` rather than arrival time.
 
-- POST /accounts/{accountId}/transactions
-- GET /accounts/{accountId}/balance
-- GET /accounts/{accountId}
-- GET /health
-- GET /actuator/metrics
+### Balance Calculation
 
-## Idempotency
+Account balances are calculated as:
 
-The Gateway stores events by eventId.
-
-If the same eventId is submitted more than once, the Gateway returns the original event with HTTP 200 and does not call the Account Service again.
-
-This prevents duplicate balance updates.
-
-The Account Service also checks duplicate eventId values as a second layer of protection.
-
-## Out-of-order handling
-
-Events can arrive in any order.
-
-The Gateway stores the original eventTimestamp and returns event lists ordered by eventTimestamp.
-
-Balances are correct because the Account Service calculates the net balance from all transactions.
-
-## Balance calculation
-
-Balance equals:
-
-CREDIT total minus DEBIT total.
+```text
+Total Credits - Total Debits
+```
 
 Example:
 
-CREDIT 150 + CREDIT 50 - DEBIT 25 = 175
+```text
+CREDIT 150
+CREDIT 50
+DEBIT 25
 
-## Trace propagation
+Balance = 175
+```
 
-The Gateway accepts X-Trace-Id from the client.
+### Distributed Tracing
 
-If the client does not send X-Trace-Id, the Gateway generates one.
+Each request is associated with a trace ID.
 
-The Gateway sends the same trace ID to the Account Service.
+The Gateway:
 
-Both services store the trace ID in MDC so logs can include it.
+- Accepts an incoming `X-Trace-Id`
+- Generates one if none is provided
+- Forwards the same trace ID to Account Service
 
-## Observability
+Both services include the trace ID in structured JSON logs so a request can be followed across service boundaries.
 
-Both services include:
+### Observability
 
-- health endpoint
-- actuator metrics
-- custom counters
-- trace ID propagation
-- structured logging support
+Both services expose:
 
-## Resiliency
+- Health endpoints
+- Structured JSON logging
+- Application metrics through Spring Actuator
+- Prometheus-compatible metrics endpoint
+- Trace-aware logging using a shared trace ID
 
-The Gateway uses timeout, retry with backoff, and a simple circuit breaker when calling Account Service.
+Prometheus metrics are available through:
 
-If the Account Service is down, POST /events returns 503 instead of hanging.
+```text
+/actuator/prometheus
+```
 
-Gateway read endpoints still work because they only use Gateway local data.
+### Resiliency
 
-## Run locally
+Communication between the Gateway and Account Service includes:
 
-Start Account Service:
+- Request timeouts
+- Retry with exponential backoff and jitter
+- Circuit breaker protection
+
+Exponential backoff helps reduce pressure on a failing downstream service, while jitter helps prevent synchronized retry storms.
+
+If Account Service becomes unavailable:
+
+- `POST /events` returns `503 Service Unavailable`
+- Event lookup endpoints continue to work
+- Balance requests return a clear error response
+
+## Technology Stack
+
+- Java 17
+- Spring Boot 3
+- Spring Data JPA
+- H2 Database
+- Spring Actuator
+- Micrometer
+- Prometheus Registry
+- Maven
+- Docker Compose
+- JUnit 5
+
+## API Endpoints
+
+### Event Gateway API (Port 8080)
+
+| Method | Endpoint | Description |
+|----------|----------|----------|
+| POST | /events | Submit transaction event |
+| GET | /events/{id} | Get event by ID |
+| GET | /events?account={accountId} | List account events |
+| GET | /accounts/{accountId}/balance | Get balance |
+| GET | /health | Health check |
+| GET | /actuator/metrics | Metrics |
+| GET | /actuator/prometheus | Prometheus metrics |
+
+### Account Service (Port 8081)
+
+| Method | Endpoint | Description |
+|----------|----------|----------|
+| POST | /accounts/{accountId}/transactions | Apply transaction |
+| GET | /accounts/{accountId}/balance | Get balance |
+| GET | /accounts/{accountId} | Account details |
+| GET | /health | Health check |
+| GET | /actuator/metrics | Metrics |
+| GET | /actuator/prometheus | Prometheus metrics |
+
+## Running Locally
+
+### Prerequisites
+
+- Java 17+
+- Maven 3.9+
+- Git
+
+Verify installation:
+
+```bash
+java -version
+mvn -version
+git --version
+```
+
+### Start Account Service
+
+Open Terminal 1:
 
 ```bash
 cd account-service
 mvn spring-boot:run
+```
 
-Start Event Gateway:
+Verify:
+
+```bash
+curl http://localhost:8081/health
+```
+
+### Start Event Gateway
+
+Open Terminal 2:
 
 ```bash
 cd event-gateway
 mvn spring-boot:run
+```
 
-The Event Gateway depends on the Account Service.
+Verify:
 
-When running locally, start Account Service first and then start Event Gateway.
+```bash
+curl http://localhost:8080/health
+```
 
-The Gateway communicates with Account Service using:
+## Example Request
 
-http://localhost:8081
+Create an event:
+
+```bash
+curl -X POST http://localhost:8080/events \
+-H "Content-Type: application/json" \
+-H "X-Trace-Id: demo-trace-1" \
+-d '{
+  "eventId":"evt-001",
+  "accountId":"acct-123",
+  "type":"CREDIT",
+  "amount":150.00,
+  "currency":"USD",
+  "eventTimestamp":"2026-05-15T14:02:11Z",
+  "metadata":{
+    "source":"mainframe-batch",
+    "batchId":"B-9042"
+  }
+}'
+```
+
+Expected:
+
+```text
+HTTP/1.1 201 Created
+```
+
+## Testing Idempotency
+
+Submit the same request again.
+
+Expected:
+
+```text
+HTTP/1.1 200 OK
+```
+
+The existing event is returned and the balance remains unchanged.
+
+## Testing Out-of-Order Events
+
+Submit events with timestamps that are not in arrival order and then query:
+
+```bash
+curl "http://localhost:8080/events?account=acct-123"
+```
+
+Events will be returned ordered by:
+
+```text
+eventTimestamp ASC
+```
+
+regardless of arrival order.
+
+## Metrics
+
+Application metrics are available through Spring Actuator.
+
+Examples:
+
+```bash
+curl http://localhost:8080/actuator/metrics
+curl http://localhost:8080/actuator/prometheus
+
+curl http://localhost:8081/actuator/metrics
+curl http://localhost:8081/actuator/prometheus
+```
+
+These endpoints can be scraped by Prometheus and visualized through tools such as Grafana.
+
+## Running Tests
+
+From the project root:
+
+```bash
+mvn test
+```
+
+Expected:
+
+```text
+BUILD SUCCESS
+```
+
+The test suite covers:
+
+- Validation
+- Idempotency
+- Out-of-order handling
+- Balance calculation
+- Trace propagation
+- Service degradation
+- Gateway → Account Service integration flow
+
+## Running with Docker Compose
+
+Start both services:
+
+```bash
+docker compose up --build
+```
+
+Verify:
+
+```bash
+curl http://localhost:8080/health
+curl http://localhost:8081/health
+```
+
+Stop:
+
+```bash
+docker compose down
+```
+
+## Design Notes
+
+A few implementation decisions worth calling out:
+
+- Each service has its own database to maintain clear ownership boundaries.
+- Idempotency is enforced in the Gateway and validated again in Account Service as a safety net.
+- The Gateway stores events locally, allowing event queries to continue working even if Account Service is unavailable.
+- Retry, timeout, and circuit breaker behavior were added to make service-to-service communication more resilient.
+- Prometheus metrics were added to improve operational visibility.
+
+## Future Improvements
+
+If this project were extended further, a few areas worth exploring would be:
+
+- OpenTelemetry with Zipkin or Jaeger
+- Grafana dashboards
+- API rate limiting
+- Contract testing with Pact
+- Asynchronous recovery queue for failed events
+- PostgreSQL instead of in-memory databases
