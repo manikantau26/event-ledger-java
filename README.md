@@ -103,3 +103,17 @@ Start Account Service:
 ```bash
 cd account-service
 mvn spring-boot:run
+
+Start Event Gateway:
+
+```bash
+cd event-gateway
+mvn spring-boot:run
+
+The Event Gateway depends on the Account Service.
+
+When running locally, start Account Service first and then start Event Gateway.
+
+The Gateway communicates with Account Service using:
+
+http://localhost:8081
