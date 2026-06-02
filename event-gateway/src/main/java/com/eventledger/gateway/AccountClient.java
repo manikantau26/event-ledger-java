@@ -10,6 +10,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.concurrent.ThreadLocalRandom;
 import java.time.Duration;
 import java.util.Map;
 
@@ -70,10 +71,15 @@ public class AccountClient {
                 return;
             } catch (RestClientException ex) {
                 circuitBreaker.recordFailure();
-                log.warn("Account Service call failed attempt={} traceId={}", attempts, traceId);
+                log.warn("Account Service call failed attempt={} traceId={}, retrying with backoff", attempts, traceId);
 
                 try {
-                    Thread.sleep(100L * attempts);
+                    long baseDelayMs = 100L;
+                    long exponentialDelayMs = (long) (baseDelayMs * Math.pow(2, attempts - 1));
+                    long jitterMs = ThreadLocalRandom.current().nextLong(0, 100);
+                    long totalDelayMs = exponentialDelayMs + jitterMs;
+
+                    Thread.sleep(totalDelayMs);
                 } catch (InterruptedException interruptedException) {
                     Thread.currentThread().interrupt();
                 }
