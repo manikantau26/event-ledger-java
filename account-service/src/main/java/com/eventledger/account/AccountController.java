@@ -14,6 +14,11 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * REST controller for account operations.
+ *
+ * Supports health checks, transaction application, balance queries, and account summaries.
+ */
 @RestController
 public class AccountController {
 
@@ -29,6 +34,7 @@ public class AccountController {
 
     @GetMapping("/health")
     public Map<String, Object> health() {
+        // Basic service health indicator used by orchestration and monitoring.
         return Map.of(
                 "status", "ok",
                 "service", "account-service",
@@ -41,12 +47,14 @@ public class AccountController {
             @PathVariable String accountId,
             @Valid @RequestBody TransactionRequest request
     ) {
+        // Validate transaction semantics before saving.
         if (!request.type().equals("CREDIT") && !request.type().equals("DEBIT")) {
             return ResponseEntity.badRequest().body(Map.of(
                     "error", "type must be CREDIT or DEBIT"
             ));
         }
 
+        // Ignore duplicate events to ensure idempotency.
         if (repository.existsById(request.eventId())) {
             log.info("Duplicate transaction ignored eventId={}", request.eventId());
 
@@ -83,6 +91,7 @@ public class AccountController {
         BigDecimal balance = BigDecimal.ZERO;
         String currency = "USD";
 
+        // Build balance from transaction history. Credits increase, debits decrease.
         for (TransactionEntity tx : transactions) {
             currency = tx.getCurrency();
 

@@ -14,6 +14,11 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.time.Duration;
 import java.util.Map;
 
+/**
+ * Client for communicating with the account-service.
+ *
+ * Handles trace propagation, retry backoff, and circuit breaker protection.
+ */
 @Component
 public class AccountClient {
 
@@ -62,6 +67,7 @@ public class AccountClient {
 
         int attempts = 0;
 
+        // Retry failed account-service calls with exponential backoff and jitter.
         while (attempts < 3) {
             attempts++;
 

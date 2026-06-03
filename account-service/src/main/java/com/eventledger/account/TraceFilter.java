@@ -11,6 +11,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Servlet filter that injects a trace identifier into each request.
+ *
+ * The trace ID is stored in MDC and propagated via the X-Trace-Id header.
+ */
 @Component
 public class TraceFilter extends OncePerRequestFilter {
 
@@ -35,6 +40,7 @@ public class TraceFilter extends OncePerRequestFilter {
         try {
             filterChain.doFilter(request, response);
         } finally {
+            // Ensure MDC state is removed after request handling.
             MDC.clear();
         }
     }

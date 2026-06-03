@@ -8,8 +8,16 @@ import java.time.Instant;
 @Component
 public class CircuitBreaker {
 
+    /**
+     * Number of consecutive failures recorded.
+     */
     private int failures = 0;
+
+    /**
+     * Instant when the circuit opened after exceeding the failure threshold.
+     */
     private Instant openedAt;
+
     private final int threshold = 3;
     private final Duration resetAfter = Duration.ofSeconds(10);
 
@@ -19,6 +27,7 @@ public class CircuitBreaker {
         }
 
         if (Instant.now().isAfter(openedAt.plus(resetAfter))) {
+            // Reset the circuit after the configured cooldown period.
             failures = 0;
             openedAt = null;
             return true;

@@ -11,6 +11,11 @@ import org.springframework.web.filter.OncePerRequestFilter;
 import java.io.IOException;
 import java.util.UUID;
 
+/**
+ * Servlet filter that assigns or propagates request trace IDs.
+ *
+ * This enables distributed tracing across the gateway and account-service.
+ */
 @Component
 public class TraceFilter extends OncePerRequestFilter {
 

@@ -7,6 +7,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+/**
+ * JPA entity for storing events accepted by the gateway.
+ */
 @Entity
 @Table(name = "events")
 public class EventEntity {

@@ -7,6 +7,9 @@ import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+/**
+ * JPA entity representing a transaction applied to an account.
+ */
 @Entity
 @Table(name = "transactions")
 public class TransactionEntity {

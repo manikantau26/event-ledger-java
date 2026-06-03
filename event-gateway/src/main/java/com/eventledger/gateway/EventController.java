@@ -15,6 +15,11 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * REST controller for event gateway operations.
+ *
+ * Accepts events, stores them, and forwards account transaction requests to the account service.
+ */
 @RestController
 public class EventController {
 
@@ -41,6 +46,7 @@ public class EventController {
 
     @GetMapping("/health")
     public Map<String, Object> health() {
+        // Health endpoint used by load balancers and uptime probes.
         return Map.of(
                 "status", "ok",
                 "service", "event-gateway",
@@ -61,6 +67,7 @@ public class EventController {
 
             EventEntity existing = repository.findById(request.eventId()).orElseThrow();
 
+            // Return the existing event record for idempotent duplicate submissions.
             log.info("Duplicate event received eventId={}", request.eventId());
 
             return ResponseEntity.ok(toResponse(existing));
@@ -121,6 +128,9 @@ public class EventController {
         }
     }
 
+    /**
+     * Convert stored event entity into a serializable response payload.
+     */
     private Map<String, Object> toResponse(EventEntity event) {
         return Map.of(
                 "eventId", event.getEventId(),

@@ -7,6 +7,9 @@ import jakarta.validation.constraints.NotNull;
 import java.math.BigDecimal;
 import java.time.Instant;
 
+/**
+ * Incoming request payload for applying a transaction to an account.
+ */
 public record TransactionRequest(
         @NotBlank String eventId,
         @NotBlank String type,

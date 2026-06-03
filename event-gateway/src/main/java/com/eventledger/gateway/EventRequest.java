@@ -8,6 +8,9 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Map;
 
+/**
+ * Incoming request payload for an event submitted to the event gateway.
+ */
 public record EventRequest(
         @NotBlank String eventId,
         @NotBlank String accountId,
